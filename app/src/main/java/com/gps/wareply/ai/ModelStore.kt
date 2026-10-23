@@ -29,7 +29,7 @@ object ModelStore {
      * Streams the picked file into app storage. Returns the byte count, or throws.
      * [onProgress] gets bytes copied so far; total is -1 when the length is unknown.
      */
-    suspend fun import(
+    suspend fun importFrom(
         ctx: Context,
         uri: Uri,
         onProgress: (copied: Long, total: Long) -> Unit

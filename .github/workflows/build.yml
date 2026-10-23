@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   build:
@@ -41,7 +42,28 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/build.log
+
+      # Workflow logs are only downloadable as a blob, so surface the compile
+      # errors somewhere the API can reach.
+      - name: Report build errors
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## Filtered'
+            echo '```'
+            grep -E "^e: |^w: .*error|error:|Unresolved reference|FAILURE:|Caused by:|> Task .* FAILED|Compilation error" /tmp/build.log | head -80 || true
+            echo '```'
+            echo '## Tail'
+            echo '```'
+            tail -n 120 /tmp/build.log
+            echo '```'
+          } > /tmp/body.md
+          gh issue create --title "Build failed: ${{ github.sha }}" --body-file /tmp/body.md
 
       - name: Upload APK as a workflow artifact
         uses: actions/upload-artifact@v4

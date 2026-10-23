@@ -43,7 +43,7 @@ fun AiTab() {
         importing = true; status = null; progress = "Starting…"
         scope.launch {
             try {
-                val bytes = ModelStore.import(ctx, uri) { copied, total ->
+                val bytes = ModelStore.importFrom(ctx, uri) { copied, total ->
                     progress = if (total > 0)
                         "${copied / 1024 / 1024} MB of ${total / 1024 / 1024} MB"
                     else "${copied / 1024 / 1024} MB"

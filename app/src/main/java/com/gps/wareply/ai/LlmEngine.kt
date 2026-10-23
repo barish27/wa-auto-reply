@@ -111,6 +111,6 @@ object LlmEngine {
         val e = engine
         engine = null
         loadedFrom = null
-        try { e?.close() } catch (_: Throwable) { }
+        try { (e as? AutoCloseable)?.close() } catch (_: Throwable) { }
     }
 }
