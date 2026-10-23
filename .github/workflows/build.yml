@@ -9,23 +9,33 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to Ubuntu 26 on 2026-10-19 and the
+    # Android SDK layout there is not what the build expects.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}  ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMAN=$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          if [ -z "$SDKMAN" ]; then
+            echo "sdkmanager not found under $SDK; contents:"; ls -R "$SDK" | head -40; exit 1
+          fi
+          echo "Using $SDKMAN"
+          yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
+          "$SDKMAN" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
 
-      - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Set up Gradle 8.9
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -40,15 +50,12 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      # Also publish it as a release so the .apk has a direct, one-tap
-      # download link that works from a phone browser.
-      - name: Publish release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      - name: Publish it as a release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest -y --cleanup-tag || true
           gh release create latest \
             app/build/outputs/apk/debug/app-debug.apk \
-            --title "Latest debug build" \
-            --notes "Automatic build of commit ${{ github.sha }}"
+            --title "WA Auto Reply - latest build" \
+            --notes "Automatic build of commit ${{ github.sha }}. Tap the .apk below to install."
