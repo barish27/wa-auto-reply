@@ -3,6 +3,11 @@ package com.gps.wareply.data
 import org.json.JSONObject
 import java.util.UUID
 
+enum class AiBackend(val label: String) {
+    CLOUD("ChatGPT / API"),
+    ON_DEVICE("On this phone")
+}
+
 enum class MatchType(val label: String) {
     ANY_MESSAGE("Any message"),
     CONTACT_CONTAINS("Sender name contains"),

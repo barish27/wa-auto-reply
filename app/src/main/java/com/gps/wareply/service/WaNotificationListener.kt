@@ -6,8 +6,7 @@ import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.gps.wareply.ai.LlmEngine
-import com.gps.wareply.ai.ModelStore
-import com.gps.wareply.ai.PromptBuilder
+import com.gps.wareply.ai.ReplyWriter
 import com.gps.wareply.bubble.BubbleManager
 import com.gps.wareply.data.LogEntry
 import com.gps.wareply.data.Prefs
@@ -87,15 +86,7 @@ class WaNotificationListener : NotificationListenerService() {
         }
 
         scope.launch {
-            val written = if (ModelStore.isReady(this@WaNotificationListener)) {
-                PromptBuilder.clean(
-                    LlmEngine.generate(
-                        this@WaNotificationListener,
-                        PromptBuilder.build(msg),
-                        Prefs.aiTimeoutSeconds * 1000L
-                    )
-                )
-            } else null
+            val written = ReplyWriter.write(this@WaNotificationListener, msg)
 
             val text = when {
                 written != null -> written + Prefs.aiMarker
@@ -106,7 +97,7 @@ class WaNotificationListener : NotificationListenerService() {
             if (text == null) {
                 // Nothing sendable. Release the cooldown so the next message gets a turn.
                 AutoReplyEngine.clearCooldown(msg.chatKey)
-                BubbleManager.noteAiFailed(msg.chatKey, LlmEngine.lastError)
+                BubbleManager.noteAiFailed(msg.chatKey, ReplyWriter.lastError())
                 return@launch
             }
             deliver(action, msg, text, aiWritten = written != null)

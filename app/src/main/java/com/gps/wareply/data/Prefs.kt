@@ -71,6 +71,28 @@ object Prefs {
         get() = sp.getInt("to", 18 * 60)
         set(v) { sp.edit().putInt("to", v).apply(); bump() }
 
+    // ---------- AI ----------
+
+    /** Which engine writes the reply. */
+    var aiBackend: AiBackend
+        get() = runCatching { AiBackend.valueOf(sp.getString("aiBackend", "") ?: "") }
+            .getOrDefault(AiBackend.CLOUD)
+        set(v) { sp.edit().putString("aiBackend", v.name).apply(); bump() }
+
+    /** Any OpenAI-compatible endpoint. */
+    var cloudBaseUrl: String
+        get() = sp.getString("cloudUrl", "https://api.openai.com/v1") ?: ""
+        set(v) { sp.edit().putString("cloudUrl", v).apply(); bump() }
+
+    var cloudApiKey: String
+        get() = sp.getString("cloudKey", "") ?: ""
+        set(v) { sp.edit().putString("cloudKey", v).apply(); bump() }
+
+    /** Model ids change often, so this is free text rather than a fixed list. */
+    var cloudModel: String
+        get() = sp.getString("cloudModel", "gpt-5-nano") ?: ""
+        set(v) { sp.edit().putString("cloudModel", v).apply(); bump() }
+
     // ---------- on-device AI ----------
 
     /** Master switch: write replies with the local model instead of fixed text. */
