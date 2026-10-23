@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FF075E54</color>
+    <color name="accent">#FF128C7E</color>
+    <color name="bubble">#FF128C7E</color>
+    <color name="card">#FFFFFFFF</color>
+    <color name="text_primary">#FF101418</color>
+    <color name="text_secondary">#FF5B6670</color>
+</resources>
