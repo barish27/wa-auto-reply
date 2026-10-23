@@ -41,7 +41,7 @@ object PromptBuilder {
     /** Returns a sendable reply, or null when the output is unusable. */
     fun clean(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
-        var t = raw
+        var t: String = raw
 
         // Strip chat-template scaffolding the model sometimes echoes back.
         for (tok in listOf("<start_of_turn>", "<end_of_turn>", "<eos>", "<bos>", "model\n", "user\n")) {
