@@ -2,6 +2,8 @@ package com.gps.wareply.service
 
 import android.app.Notification
 import android.app.PendingIntent
+import android.content.Context
+import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 
@@ -15,7 +17,9 @@ data class IncomingMessage(
     val text: String,
     val isGroup: Boolean,
     val postedAt: Long,
-    val contentIntent: PendingIntent?
+    val contentIntent: PendingIntent?,
+    /** The sender's WhatsApp profile picture, when the notification carries one. */
+    val avatar: Icon? = null
 ) {
     val displayChat: String get() = groupName ?: sender
 }
@@ -24,7 +28,7 @@ object NotificationParser {
 
     val WA_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
 
-    fun parse(sbn: StatusBarNotification): IncomingMessage? {
+    fun parse(ctx: Context, sbn: StatusBarNotification): IncomingMessage? {
         val n = sbn.notification ?: return null
 
         // Group summary rows, ongoing calls and progress rows are not messages.
@@ -38,6 +42,7 @@ object NotificationParser {
         var sender = title
         var group: String? = null
         var isGroup = false
+        var avatar: Icon? = null
 
         val style = runCatching {
             NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
@@ -49,6 +54,8 @@ object NotificationParser {
             style.messages.lastOrNull()?.let { m ->
                 body = m.text?.toString()?.trim() ?: body
                 m.person?.name?.toString()?.let { sender = it }
+                // In a group this is the member's photo, which is what we want.
+                avatar = runCatching { m.person?.icon?.toIcon(ctx) }.getOrNull()
             }
         }
 
@@ -75,6 +82,11 @@ object NotificationParser {
             lower.endsWith("new messages")
         ) return null
 
+        // Fall back to the notification's own large icon (the chat photo).
+        if (avatar == null) {
+            avatar = runCatching { n.getLargeIcon() }.getOrNull()
+        }
+
         return IncomingMessage(
             chatKey = sbn.tag ?: group ?: sender!!,
             sender = sender!!,
@@ -82,7 +94,8 @@ object NotificationParser {
             text = text,
             isGroup = isGroup,
             postedAt = sbn.postTime,
-            contentIntent = n.contentIntent
+            contentIntent = n.contentIntent,
+            avatar = avatar
         )
     }
 }

@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.Icon
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
@@ -19,6 +21,8 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
+import androidx.core.graphics.drawable.toBitmap
 import com.gps.wareply.R
 import com.gps.wareply.data.LogEntry
 import com.gps.wareply.data.Prefs
@@ -41,7 +45,8 @@ object BubbleManager {
         val action: ReplyAction?,
         val autoReplied: String?,
         val pendingAi: Boolean = false,
-        val contentIntent: PendingIntent?
+        val contentIntent: PendingIntent?,
+        val avatar: Icon? = null
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -156,6 +161,26 @@ object BubbleManager {
 
     private fun bind(p: Pending) {
         val v = root ?: return
+        val avatar = circular(v.context, p.avatar)
+
+        // The chat head becomes the sender's photo when there is one.
+        v.findViewById<ImageView>(R.id.bubbleIcon).apply {
+            if (avatar != null) {
+                setImageDrawable(avatar)
+                setPadding(0, 0, 0, 0)
+            } else {
+                setImageResource(R.drawable.ic_chat)
+                val pad = (13 * resources.displayMetrics.density).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+        }
+        v.findViewById<ImageView>(R.id.senderAvatar).apply {
+            if (avatar != null) {
+                setImageDrawable(avatar)
+                visibility = View.VISIBLE
+            } else visibility = View.GONE
+        }
+
         v.findViewById<TextView>(R.id.sender).text = p.sender
         v.findViewById<TextView>(R.id.chatName).apply {
             if (p.groupName != null && p.groupName != p.sender) {
@@ -342,6 +367,15 @@ object BubbleManager {
         runCatching { manager.updateViewLayout(v, lp) }
     }
 
+    /** Loads the notification icon and clips it to a circle. */
+    private fun circular(ctx: Context, icon: Icon?): Drawable? {
+        if (icon == null) return null
+        return runCatching {
+            val bmp = icon.loadDrawable(ctx)?.toBitmap() ?: return null
+            RoundedBitmapDrawableFactory.create(ctx.resources, bmp).apply { isCircular = true }
+        }.getOrNull()
+    }
+
     private fun buzz(ctx: Context) {
         val vib = ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
         if (!vib.hasVibrator()) return
@@ -362,7 +396,8 @@ object BubbleManager {
             action = null,
             autoReplied = null,
             pendingAi = false,
-            contentIntent = null
+            contentIntent = null,
+            avatar = null
         )
     )
 }

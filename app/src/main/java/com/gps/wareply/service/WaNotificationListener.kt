@@ -46,7 +46,7 @@ class WaNotificationListener : NotificationListenerService() {
         if (sbn.packageName !in NotificationParser.WA_PACKAGES) return
 
         val action = ReplyAction.from(sbn.notification) ?: return
-        val msg = NotificationParser.parse(sbn) ?: return
+        val msg = NotificationParser.parse(this, sbn) ?: return
 
         // WhatsApp re-posts the same notification as a chat updates; ignore repeats.
         val sig = msg.chatKey to msg.text
@@ -69,7 +69,8 @@ class WaNotificationListener : NotificationListenerService() {
                     action = action,
                     autoReplied = null,
                     pendingAi = decision?.useAi == true,
-                    contentIntent = msg.contentIntent
+                    contentIntent = msg.contentIntent,
+                    avatar = msg.avatar
                 )
             )
         }
