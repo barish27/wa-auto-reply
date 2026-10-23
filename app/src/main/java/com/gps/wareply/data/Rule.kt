@@ -16,7 +16,9 @@ data class Rule(
     val match: MatchType = MatchType.ANY_MESSAGE,
     val value: String = "",
     val reply: String = "",
-    val includeGroups: Boolean = false
+    val includeGroups: Boolean = false,
+    /** Let the on-device model write this one; [reply] becomes the fallback text. */
+    val useAi: Boolean = false
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -26,6 +28,7 @@ data class Rule(
         put("value", value)
         put("reply", reply)
         put("includeGroups", includeGroups)
+        put("useAi", useAi)
     }
 
     companion object {
@@ -37,7 +40,8 @@ data class Rule(
                 .getOrDefault(MatchType.ANY_MESSAGE),
             value = o.optString("value", ""),
             reply = o.optString("reply", ""),
-            includeGroups = o.optBoolean("includeGroups", false)
+            includeGroups = o.optBoolean("includeGroups", false),
+            useAi = o.optBoolean("useAi", false)
         )
     }
 }
@@ -48,11 +52,13 @@ data class LogEntry(
     val incoming: String,
     val reply: String,
     val auto: Boolean,
-    val ok: Boolean
+    val ok: Boolean,
+    /** Written by the on-device model rather than taken from the rule text. */
+    val ai: Boolean = false
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("time", time); put("chat", chat); put("incoming", incoming)
-        put("reply", reply); put("auto", auto); put("ok", ok)
+        put("reply", reply); put("auto", auto); put("ok", ok); put("ai", ai)
     }
 
     companion object {
@@ -62,7 +68,8 @@ data class LogEntry(
             incoming = o.optString("incoming"),
             reply = o.optString("reply"),
             auto = o.optBoolean("auto"),
-            ok = o.optBoolean("ok", true)
+            ok = o.optBoolean("ok", true),
+            ai = o.optBoolean("ai", false)
         )
     }
 }

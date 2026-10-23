@@ -50,13 +50,14 @@ fun MainScreen() {
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             TabRow(selectedTabIndex = tab) {
-                listOf("Setup", "Rules", "History").forEachIndexed { i, label ->
+                listOf("Setup", "Rules", "AI", "History").forEachIndexed { i, label ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
                 }
             }
             when (tab) {
                 0 -> SetupTab(ctx)
                 1 -> RulesTab()
+                2 -> AiTab()
                 else -> HistoryTab()
             }
         }
@@ -293,7 +294,8 @@ private fun RulesTab() {
                                         MatchType.ANY_MESSAGE -> "Any message"
                                         MatchType.CONTACT_CONTAINS -> "Sender contains \"${rule.value}\""
                                         MatchType.TEXT_CONTAINS -> "Message contains \"${rule.value}\""
-                                    } + if (rule.includeGroups) " · groups too" else "",
+                                    } + (if (rule.includeGroups) " · groups too" else "")
+                                        + (if (rule.useAi) " · AI" else ""),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -335,6 +337,7 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
     var value by remember { mutableStateOf(rule.value) }
     var reply by remember { mutableStateOf(rule.reply) }
     var groups by remember { mutableStateOf(rule.includeGroups) }
+    var useAi by remember { mutableStateOf(rule.useAi) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -363,11 +366,20 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = useAi, onCheckedChange = { useAi = it })
+                    Text("Write with AI", style = MaterialTheme.typography.bodySmall)
+                }
                 OutlinedTextField(
                     value = reply, onValueChange = { reply = it },
-                    label = { Text("Reply to send") },
+                    label = { Text(if (useAi) "Fallback text" else "Reply to send") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
+                )
+                if (useAi) Text(
+                    "Sent when the model is slow or unavailable.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = groups, onCheckedChange = { groups = it })
@@ -377,7 +389,7 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
         },
         confirmButton = {
             TextButton(
-                enabled = reply.isNotBlank(),
+                enabled = reply.isNotBlank() || useAi,
                 onClick = {
                     onSave(
                         rule.copy(
@@ -385,7 +397,8 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
                             match = match,
                             value = value.trim(),
                             reply = reply.trim(),
-                            includeGroups = groups
+                            includeGroups = groups,
+                            useAi = useAi
                         )
                     )
                 }
@@ -433,7 +446,15 @@ private fun LogCard(e: LogEntry) {
                 Text(e.chat, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 AssistChip(
                     onClick = {},
-                    label = { Text(if (e.auto) "auto" else "manual") }
+                    label = {
+                        Text(
+                            when {
+                                e.ai -> "AI"
+                                e.auto -> "auto"
+                                else -> "manual"
+                            }
+                        )
+                    }
                 )
             }
             Text(

@@ -40,6 +40,7 @@ object BubbleManager {
         val text: String,
         val action: ReplyAction?,
         val autoReplied: String?,
+        val pendingAi: Boolean = false,
         val contentIntent: PendingIntent?
     )
 
@@ -83,6 +84,26 @@ object BubbleManager {
     /** When the user opens the chat in WhatsApp the notification clears — drop the bubble too. */
     fun onChatCleared(tag: String?) = main.post {
         if (tag != null && current?.chatKey == tag && !expanded) destroy()
+    }
+
+    /** Called once the model's reply actually went out. */
+    fun noteAutoReply(chatKey: String, text: String) = main.post {
+        val p = current ?: return@post
+        if (p.chatKey != chatKey) return@post
+        current = p.copy(autoReplied = text, pendingAi = false)
+        current?.let { bind(it) }
+    }
+
+    /** Called when nothing could be sent, so the bubble does not sit on "Writing…". */
+    fun noteAiFailed(chatKey: String, reason: String?) = main.post {
+        val p = current ?: return@post
+        if (p.chatKey != chatKey || !p.pendingAi) return@post
+        current = p.copy(pendingAi = false)
+        val v = root ?: return@post
+        v.findViewById<TextView>(R.id.autoNote).apply {
+            text = "Could not auto-reply" + (reason?.let { ": $it" } ?: "")
+            visibility = View.VISIBLE
+        }
     }
 
     // ---------------- window ----------------
@@ -144,10 +165,17 @@ object BubbleManager {
         }
         v.findViewById<TextView>(R.id.message).text = p.text
         v.findViewById<TextView>(R.id.autoNote).apply {
-            if (p.autoReplied != null) {
-                text = "Auto-replied: ${p.autoReplied}"
-                visibility = View.VISIBLE
-            } else visibility = View.GONE
+            when {
+                p.autoReplied != null -> {
+                    text = "Auto-replied: ${p.autoReplied}"
+                    visibility = View.VISIBLE
+                }
+                p.pendingAi -> {
+                    text = "Writing a reply…"
+                    visibility = View.VISIBLE
+                }
+                else -> visibility = View.GONE
+            }
         }
         v.findViewById<TextView>(R.id.badge).apply {
             if (unread > 1 && !expanded) {
@@ -333,6 +361,7 @@ object BubbleManager {
                 "Drag the circle to move it, tap to open, tap outside the card to leave it.",
             action = null,
             autoReplied = null,
+            pendingAi = false,
             contentIntent = null
         )
     )

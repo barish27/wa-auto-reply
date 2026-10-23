@@ -21,7 +21,10 @@ object AutoReplyEngine {
     /** chatKey -> epoch millis of the last auto-reply we sent there. */
     private val lastReplied = mutableMapOf<String, Long>()
 
-    fun decide(ctx: Context, msg: IncomingMessage): String? {
+    /** What should be sent, and whether the model gets to write it. */
+    data class Decision(val canned: String, val useAi: Boolean)
+
+    fun decide(ctx: Context, msg: IncomingMessage): Decision? {
         if (!Prefs.autoReplyEnabled) return null
         if (msg.isGroup && Prefs.skipGroups) return null
         if (!withinActiveHours()) return null
@@ -32,13 +35,21 @@ object AutoReplyEngine {
         if (last != null && System.currentTimeMillis() - last < cooldownMs) return null
 
         val rule = Prefs.rules().firstOrNull { it.enabled && matches(it, msg) } ?: return null
-        if (rule.reply.isBlank()) return null
 
-        return expand(rule.reply, msg)
+        val useAi = Prefs.aiEnabled && rule.useAi
+        // A fixed-text rule with no text has nothing to send. An AI rule may have
+        // an empty fallback as long as the fallback is switched off.
+        if (rule.reply.isBlank() && !useAi) return null
+
+        return Decision(canned = expand(rule.reply, msg), useAi = useAi)
     }
 
     fun markReplied(chatKey: String) {
         lastReplied[chatKey] = System.currentTimeMillis()
+    }
+
+    fun clearCooldown(chatKey: String) {
+        lastReplied.remove(chatKey)
     }
 
     /** Lets the user clear all cooldowns from the UI. */

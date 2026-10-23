@@ -5,11 +5,21 @@ import android.content.Context
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.gps.wareply.ai.LlmEngine
+import com.gps.wareply.ai.ModelStore
+import com.gps.wareply.ai.PromptBuilder
 import com.gps.wareply.bubble.BubbleManager
 import com.gps.wareply.data.LogEntry
 import com.gps.wareply.data.Prefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class WaNotificationListener : NotificationListenerService() {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** key+text of the last row we acted on, to swallow WhatsApp's re-posts. */
     private var lastHandled: Pair<String, String>? = null
@@ -23,7 +33,14 @@ class WaNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connected = false
         BubbleManager.hide()
+        LlmEngine.release()
         super.onListenerDisconnected()
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        LlmEngine.release()
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -39,27 +56,9 @@ class WaNotificationListener : NotificationListenerService() {
         lastHandled = sig
         lastHandledAt = now
 
-        val autoText = AutoReplyEngine.decide(this, msg)
-        var autoSent: String? = null
+        val decision = AutoReplyEngine.decide(this, msg)
 
-        if (autoText != null) {
-            val ok = action.send(this, autoText)
-            if (ok) {
-                AutoReplyEngine.markReplied(msg.chatKey)
-                autoSent = autoText
-            }
-            Prefs.addLog(
-                LogEntry(
-                    time = now,
-                    chat = msg.displayChat,
-                    incoming = msg.text,
-                    reply = autoText,
-                    auto = true,
-                    ok = ok
-                )
-            )
-        }
-
+        // Show the bubble first so the message is on screen while the model thinks.
         if (Prefs.bubbleEnabled) {
             BubbleManager.show(
                 this,
@@ -69,11 +68,72 @@ class WaNotificationListener : NotificationListenerService() {
                     groupName = msg.groupName,
                     text = msg.text,
                     action = action,
-                    autoReplied = autoSent,
+                    autoReplied = null,
+                    pendingAi = decision?.useAi == true,
                     contentIntent = msg.contentIntent
                 )
             )
         }
+
+        if (decision == null) return
+
+        // Claim the cooldown slot now, not after generation: a second message
+        // arriving while the model is running must not start a second reply.
+        AutoReplyEngine.markReplied(msg.chatKey)
+
+        if (!decision.useAi) {
+            deliver(action, msg, decision.canned, aiWritten = false)
+            return
+        }
+
+        scope.launch {
+            val written = if (ModelStore.isReady(this@WaNotificationListener)) {
+                PromptBuilder.clean(
+                    LlmEngine.generate(
+                        this@WaNotificationListener,
+                        PromptBuilder.build(msg),
+                        Prefs.aiTimeoutSeconds * 1000L
+                    )
+                )
+            } else null
+
+            val text = when {
+                written != null -> written + Prefs.aiMarker
+                Prefs.aiFallbackToCanned && decision.canned.isNotBlank() -> decision.canned
+                else -> null
+            }
+
+            if (text == null) {
+                // Nothing sendable. Release the cooldown so the next message gets a turn.
+                AutoReplyEngine.clearCooldown(msg.chatKey)
+                BubbleManager.noteAiFailed(msg.chatKey, LlmEngine.lastError)
+                return@launch
+            }
+            deliver(action, msg, text, aiWritten = written != null)
+        }
+    }
+
+    private fun deliver(
+        action: ReplyAction,
+        msg: IncomingMessage,
+        text: String,
+        aiWritten: Boolean
+    ) {
+        val ok = action.send(this, text)
+        Prefs.addLog(
+            LogEntry(
+                time = System.currentTimeMillis(),
+                chat = msg.displayChat,
+                incoming = msg.text,
+                reply = text,
+                auto = true,
+                ok = ok,
+                ai = aiWritten
+            )
+        )
+        if (ok) BubbleManager.noteAutoReply(msg.chatKey, text) else BubbleManager.noteAiFailed(
+            msg.chatKey, "WhatsApp refused the reply"
+        )
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
