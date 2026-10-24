@@ -3,11 +3,6 @@ package com.gps.wareply.data
 import org.json.JSONObject
 import java.util.UUID
 
-enum class AiBackend(val label: String) {
-    CLOUD("ChatGPT / API"),
-    ON_DEVICE("On this phone")
-}
-
 enum class MatchType(val label: String) {
     ANY_MESSAGE("Any message"),
     CONTACT_CONTAINS("Sender name contains"),
@@ -47,38 +42,6 @@ data class Rule(
             reply = o.optString("reply", ""),
             includeGroups = o.optBoolean("includeGroups", false),
             useAi = o.optBoolean("useAi", false)
-        )
-    }
-}
-
-data class LogEntry(
-    val time: Long,
-    val chat: String,
-    val incoming: String,
-    val reply: String,
-    val auto: Boolean,
-    val ok: Boolean,
-    /** Written by the on-device model rather than taken from the rule text. */
-    val ai: Boolean = false,
-    /** Set when nothing was sent; says which gate stopped it. */
-    val skipped: String? = null
-) {
-    fun toJson(): JSONObject = JSONObject().apply {
-        put("time", time); put("chat", chat); put("incoming", incoming)
-        put("reply", reply); put("auto", auto); put("ok", ok); put("ai", ai)
-        skipped?.let { put("skip", it) }
-    }
-
-    companion object {
-        fun fromJson(o: JSONObject) = LogEntry(
-            time = o.optLong("time"),
-            chat = o.optString("chat"),
-            incoming = o.optString("incoming"),
-            reply = o.optString("reply"),
-            auto = o.optBoolean("auto"),
-            ok = o.optBoolean("ok", true),
-            ai = o.optBoolean("ai", false),
-            skipped = o.optString("skip", "").takeIf { it.isNotBlank() }
         )
     }
 }

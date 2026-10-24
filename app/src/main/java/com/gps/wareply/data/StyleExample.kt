@@ -9,7 +9,7 @@ import java.util.UUID
  * These are shown to the model as examples of how the owner actually writes.
  * It is not training — the weights never change — but a handful of real
  * examples moves the tone much closer than any instruction does, and it works
- * identically on the cloud and on-device paths.
+ * in the on-device prompt.
  */
 data class StyleExample(
     val id: String = UUID.randomUUID().toString(),

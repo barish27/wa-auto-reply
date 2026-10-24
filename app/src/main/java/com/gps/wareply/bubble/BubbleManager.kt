@@ -24,9 +24,13 @@ import android.widget.Toast
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.core.graphics.drawable.toBitmap
 import com.gps.wareply.R
-import com.gps.wareply.data.LogEntry
+import com.gps.wareply.data.ConversationEntry
+import com.gps.wareply.data.ConversationStore
 import com.gps.wareply.data.Prefs
 import com.gps.wareply.service.ReplyAction
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
@@ -36,6 +40,8 @@ import kotlin.math.abs
  */
 @SuppressLint("StaticFieldLeak")
 object BubbleManager {
+
+    private val storageScope = CoroutineScope(Dispatchers.IO)
 
     data class Pending(
         val chatKey: String,
@@ -323,17 +329,21 @@ object BubbleManager {
         val ok = action.send(ctx, text)
         // An untouched draft counts as the model's work; an edited one is yours.
         val fromAi = p.draft != null && text == p.draft
-        Prefs.addLog(
-            LogEntry(
-                time = System.currentTimeMillis(),
-                chat = p.groupName ?: p.sender,
-                incoming = p.text,
-                reply = text,
-                auto = false,
-                ok = ok,
-                ai = fromAi
+        storageScope.launch {
+            ConversationStore.record(
+                ctx,
+                ConversationEntry(
+                    contactKey = p.chatKey,
+                    contactName = p.groupName ?: p.sender,
+                    incoming = p.text,
+                    reply = text,
+                    createdAt = System.currentTimeMillis(),
+                    automatic = false,
+                    delivered = ok,
+                    aiWritten = fromAi
+                )
             )
-        )
+        }
         Toast.makeText(ctx, if (ok) "Sent" else "Could not send", Toast.LENGTH_SHORT).show()
         input.setText("")
         destroy()

@@ -1,6 +1,7 @@
 package com.gps.wareply.ai
 
 import com.gps.wareply.data.Prefs
+import com.gps.wareply.data.ConversationEntry
 import com.gps.wareply.service.IncomingMessage
 
 /**
@@ -28,36 +29,7 @@ object PromptBuilder {
         }
     }
 
-    /** The standing instructions, as a chat API's system message. */
-    fun systemPrompt(): String {
-        val persona = Prefs.aiPersona.trim().ifBlank {
-            "You are busy at work and cannot talk properly right now."
-        }
-        return buildString {
-            append("You write one short WhatsApp reply on behalf of the phone's owner. ")
-            append("The reply is sent automatically, without the owner reading it first.\n\n")
-            append(persona).append("\n\n")
-            append("Rules:\n")
-            append("- Reply in the same language the message used, including Hinglish or Odia.\n")
-            append("- At most ").append(Prefs.aiMaxWords).append(" words. One message, no paragraphs.\n")
-            append("- Sound like a normal person texting. No \"Dear\", no sign-off.\n")
-            append("- Never agree to a meeting, payment, deadline or any commitment. ")
-            append("If a decision is asked for, say the owner will reply properly later.\n")
-            append("- Never invent facts, numbers or dates. If unsure, stay vague.\n")
-            append("- Output only the reply text itself.")
-            append(styleBlock())
-        }
-    }
-
-    /** The incoming message, as a chat API's user message. */
-    fun userPrompt(msg: IncomingMessage): String = buildString {
-        if (msg.isGroup && msg.groupName != null) {
-            append("Group: ").append(msg.groupName).append("\n")
-        }
-        append("From ").append(msg.sender).append(": ").append(msg.text)
-    }
-
-    fun build(msg: IncomingMessage): String {
+    fun build(msg: IncomingMessage, memory: List<ConversationEntry>): String {
         val persona = Prefs.aiPersona.trim().ifBlank {
             "You are busy at work and cannot talk properly right now."
         }
@@ -75,6 +47,13 @@ object PromptBuilder {
             append("- Never invent facts, numbers or dates.\n")
             append("- Output only the reply text itself, nothing else.")
             append(styleBlock())
+            if (memory.isNotEmpty()) {
+                append("\n\nRecent conversation context. Do not repeat it or invent details:\n")
+                memory.forEach { entry ->
+                    append("Them: ").append(entry.incoming).append("\n")
+                    if (entry.reply.isNotBlank()) append("Owner: ").append(entry.reply).append("\n")
+                }
+            }
             append("\n\nMessage from ").append(msg.sender).append(": \"").append(msg.text).append("\"")
         }
 

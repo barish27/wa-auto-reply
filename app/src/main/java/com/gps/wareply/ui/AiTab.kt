@@ -9,14 +9,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gps.wareply.ai.ReplyWriter
 import com.gps.wareply.ai.ModelStore
-import com.gps.wareply.data.AiBackend
 import com.gps.wareply.data.Prefs
 import com.gps.wareply.data.StyleExample
+import com.gps.wareply.data.ConversationStore
 import com.gps.wareply.service.IncomingMessage
 import kotlinx.coroutines.launch
 
@@ -61,99 +60,12 @@ fun AiTab() {
         }
     }
 
-    val cloud = Prefs.aiBackend == AiBackend.CLOUD
-
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Where replies are written", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    AiBackend.entries.forEach { b ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = Prefs.aiBackend == b,
-                                onClick = { Prefs.aiBackend = b; testOutput = null }
-                            )
-                            Column {
-                                Text(b.label, style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    if (b == AiBackend.CLOUD)
-                                        "Best quality. Costs a little per message, needs internet, and the incoming message is sent to the API."
-                                    else
-                                        "Free and private, nothing leaves the phone. Needs a 555 MB model and a capable device.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (cloud) item {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("API settings", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = Prefs.cloudApiKey,
-                        onValueChange = { Prefs.cloudApiKey = it.trim() },
-                        label = { Text("API key") },
-                        placeholder = { Text("sk-…") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = Prefs.cloudModel,
-                        onValueChange = { Prefs.cloudModel = it.trim() },
-                        label = { Text("Model") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "Any model id your key can reach. If a reply comes back saying the " +
-                            "model does not exist, copy the current id from platform.openai.com/docs/models.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = Prefs.cloudBaseUrl,
-                        onValueChange = { Prefs.cloudBaseUrl = it.trim() },
-                        label = { Text("Base URL") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        "Leave as is for ChatGPT. Any OpenAI-compatible endpoint works here, " +
-                            "including an Ollama server on your own PC.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "The key is kept in this app's private storage, unencrypted. Anyone " +
-                            "with unlocked access to the phone, or root, could read it — use a " +
-                            "key with a spending cap.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-
-        if (!cloud) item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Model", style = MaterialTheme.typography.titleMedium)
@@ -188,7 +100,7 @@ fun AiTab() {
             }
         }
 
-        if (!cloud) item {
+        item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("How to get the model", style = MaterialTheme.typography.titleMedium)
@@ -257,7 +169,7 @@ fun AiTab() {
                         "If the model is slow, fails, or isn't imported, send the rule's text instead of nothing.",
                         Prefs.aiFallbackToCanned
                     ) { Prefs.aiFallbackToCanned = it }
-                    if (!cloud) AiSwitch(
+                    AiSwitch(
                         "Gemma chat template",
                         "Leave on for instruction-tuned models (the -IT ones). Turn off for base models.",
                         Prefs.aiUseChatTemplate
@@ -309,7 +221,16 @@ fun AiTab() {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { editingStyle = StyleExample() }) { Text("Add one") }
                         OutlinedButton(onClick = {
-                            harvested = Prefs.harvestStyleFromHistory()
+                            scope.launch {
+                                val existing = Prefs.styleExamples()
+                                val known = existing.map { it.reply.trim().lowercase() }.toHashSet()
+                                val additions = ConversationStore.manualReplies(ctx, 12)
+                                    .filter { it.reply.trim().lowercase() !in known }
+                                    .distinctBy { it.reply.trim().lowercase() }
+                                    .map { StyleExample(incoming = it.incoming, reply = it.reply) }
+                                if (additions.isNotEmpty()) Prefs.saveStyleExamples(existing + additions)
+                                harvested = additions.size
+                            }
                         }) { Text("Learn from my replies") }
                     }
                     harvested?.let {
@@ -434,7 +355,7 @@ fun AiTab() {
                     )
                     Spacer(Modifier.height(10.dp))
                     Button(
-                        enabled = (if (cloud) Prefs.cloudApiKey.isNotBlank() else ready) && !testing,
+                        enabled = ready && !testing,
                         onClick = {
                             testing = true; testOutput = null
                             scope.launch {
@@ -460,7 +381,7 @@ fun AiTab() {
                         Spacer(Modifier.height(10.dp))
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(
-                            if (cloud) "Calling the API…" else "First run loads the model, which takes longest.",
+                            "First run loads the model, which takes longest.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -481,14 +402,8 @@ fun AiTab() {
 
         item {
             Text(
-                if (cloud)
-                    "Every auto-reply sends the other person's message to the API, and they " +
-                        "have not agreed to that. It also replies without you seeing it first. " +
-                        "Keep the group switch on and the cooldown generous."
-                else
-                    "A 1B model is small. It will sometimes write something bland or slightly " +
-                        "off, and it is replying without you seeing it first. Keep the group " +
-                        "switch on and the cooldown generous.",
+                "A 1B model is small. It will sometimes write something bland or slightly " +
+                    "off. Keep approval on, the group switch on, and the cooldown generous.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Start
