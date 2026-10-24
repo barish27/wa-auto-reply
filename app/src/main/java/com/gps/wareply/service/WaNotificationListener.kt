@@ -8,7 +8,8 @@ import android.service.notification.StatusBarNotification
 import com.gps.wareply.ai.LlmEngine
 import com.gps.wareply.ai.ReplyWriter
 import com.gps.wareply.bubble.BubbleManager
-import com.gps.wareply.data.LogEntry
+import com.gps.wareply.data.ConversationEntry
+import com.gps.wareply.data.ConversationStore
 import com.gps.wareply.data.Prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,12 +81,7 @@ class WaNotificationListener : NotificationListenerService() {
             // Record the near-miss so the History tab can explain the silence
             // instead of the user guessing which switch is wrong.
             (outcome as? AutoReplyEngine.Outcome.Skip)?.let { skip ->
-                Prefs.addLog(
-                    LogEntry(
-                        time = now, chat = msg.displayChat, incoming = msg.text,
-                        reply = "", auto = true, ok = false, skipped = skip.reason
-                    )
-                )
+                record(msg, "", automatic = true, delivered = false, ai = false, skipped = skip.reason)
             }
             return
         }
@@ -139,17 +135,7 @@ class WaNotificationListener : NotificationListenerService() {
         val ok = action.send(this, text)
         // A send that failed should not cost the chat its whole cooldown window.
         if (!ok) AutoReplyEngine.clearCooldown(msg.chatKey)
-        Prefs.addLog(
-            LogEntry(
-                time = System.currentTimeMillis(),
-                chat = msg.displayChat,
-                incoming = msg.text,
-                reply = text,
-                auto = true,
-                ok = ok,
-                ai = aiWritten
-            )
-        )
+        record(msg, text, automatic = true, delivered = ok, ai = aiWritten)
         if (ok) BubbleManager.noteAutoReply(msg.chatKey, text) else BubbleManager.noteAiFailed(
             msg.chatKey, "WhatsApp refused the reply"
         )
@@ -158,6 +144,32 @@ class WaNotificationListener : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (sbn.packageName in NotificationParser.WA_PACKAGES) {
             BubbleManager.onChatCleared(sbn.tag)
+        }
+    }
+
+    private fun record(
+        msg: IncomingMessage,
+        reply: String,
+        automatic: Boolean,
+        delivered: Boolean,
+        ai: Boolean,
+        skipped: String? = null
+    ) {
+        scope.launch {
+            ConversationStore.record(
+                this@WaNotificationListener,
+                ConversationEntry(
+                    contactKey = msg.chatKey,
+                    contactName = msg.displayChat,
+                    incoming = msg.text,
+                    reply = reply,
+                    createdAt = System.currentTimeMillis(),
+                    automatic = automatic,
+                    delivered = delivered,
+                    aiWritten = ai,
+                    skippedReason = skipped
+                )
+            )
         }
     }
 

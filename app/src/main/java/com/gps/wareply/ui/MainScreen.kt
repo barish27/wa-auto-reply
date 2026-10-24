@@ -21,12 +21,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gps.wareply.bubble.BubbleManager
-import com.gps.wareply.data.LogEntry
+import com.gps.wareply.data.ConversationEntry
+import com.gps.wareply.data.ConversationStore
 import com.gps.wareply.data.MatchType
 import com.gps.wareply.data.Prefs
 import com.gps.wareply.data.Rule
 import com.gps.wareply.service.AutoReplyEngine
 import com.gps.wareply.service.WaNotificationListener
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -418,16 +420,19 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
 
 @Composable
 private fun HistoryTab() {
-    @Suppress("UNUSED_VARIABLE")
-    val v = Prefs.version.intValue
-    val entries = Prefs.log()
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    val entries by remember(query) { ConversationStore.history(ctx, query) }
+        .collectAsState(initial = emptyList())
 
     if (entries.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "Nothing sent yet.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                OutlinedTextField(query, { query = it }, label = { Text("Search history") })
+                Spacer(Modifier.height(12.dp))
+                Text("No matching local history.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         return
     }
@@ -438,26 +443,36 @@ private fun HistoryTab() {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            TextButton(onClick = { Prefs.clearLog() }) { Text("Clear history") }
+            OutlinedTextField(
+                value = query, onValueChange = { query = it }, singleLine = true,
+                label = { Text("Search conversations") }, modifier = Modifier.fillMaxWidth()
+            )
         }
-        items(entries) { e -> LogCard(e) }
+        item {
+            TextButton(onClick = { scope.launch { ConversationStore.deleteAll(ctx) } }) {
+                Text("Delete all stored history")
+            }
+        }
+        items(entries, key = { it.id }) { e -> LogCard(e) {
+            scope.launch { ConversationStore.deleteContact(ctx, e.contactKey) }
+        } }
     }
 }
 
 @Composable
-private fun LogCard(e: LogEntry) {
+private fun LogCard(e: ConversationEntry, onDeleteContact: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(e.chat, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                Text(e.contactName, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 AssistChip(
                     onClick = {},
                     label = {
                         Text(
                             when {
-                                e.skipped != null -> "skipped"
-                                e.ai -> "AI"
-                                e.auto -> "auto"
+                                e.skippedReason != null -> "skipped"
+                                e.aiWritten -> "AI"
+                                e.automatic -> "auto"
                                 else -> "manual"
                             }
                         )
@@ -465,16 +480,16 @@ private fun LogCard(e: LogEntry) {
                 )
             }
             Text(
-                SimpleDateFormat("d MMM, h:mm a", Locale.getDefault()).format(Date(e.time)),
+                SimpleDateFormat("d MMM, h:mm a", Locale.getDefault()).format(Date(e.createdAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Text("“${e.incoming}”", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
-            if (e.skipped != null) {
+            if (e.skippedReason != null) {
                 Text(
-                    "Did not reply — ${e.skipped}",
+                    "Did not reply — ${e.skippedReason}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -485,14 +500,15 @@ private fun LogCard(e: LogEntry) {
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Default,
                 fontWeight = FontWeight.Medium,
-                color = if (e.ok) MaterialTheme.colorScheme.primary
+                color = if (e.delivered) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.error
             )
-            if (!e.ok) Text(
+            if (!e.delivered) Text(
                 "failed to send",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
+            TextButton(onClick = onDeleteContact) { Text("Delete this contact's history") }
         }
     }
 }

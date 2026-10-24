@@ -13,7 +13,6 @@ import org.json.JSONArray
 object Prefs {
 
     private const val FILE = "wareply"
-    private const val MAX_LOG = 200
 
     private lateinit var sp: SharedPreferences
 
@@ -21,7 +20,6 @@ object Prefs {
     val version = mutableIntStateOf(0)
 
     private var ruleCache: List<Rule>? = null
-    private var logCache: List<LogEntry>? = null
 
     fun init(ctx: Context) {
         sp = ctx.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -73,26 +71,6 @@ object Prefs {
 
     // ---------- AI ----------
 
-    /** Which engine writes the reply. */
-    var aiBackend: AiBackend
-        get() = runCatching { AiBackend.valueOf(sp.getString("aiBackend", "") ?: "") }
-            .getOrDefault(AiBackend.CLOUD)
-        set(v) { sp.edit().putString("aiBackend", v.name).apply(); bump() }
-
-    /** Any OpenAI-compatible endpoint. */
-    var cloudBaseUrl: String
-        get() = sp.getString("cloudUrl", "https://api.openai.com/v1") ?: ""
-        set(v) { sp.edit().putString("cloudUrl", v).apply(); bump() }
-
-    var cloudApiKey: String
-        get() = sp.getString("cloudKey", "") ?: ""
-        set(v) { sp.edit().putString("cloudKey", v).apply(); bump() }
-
-    /** Model ids change often, so this is free text rather than a fixed list. */
-    var cloudModel: String
-        get() = sp.getString("cloudModel", "gpt-5-nano") ?: ""
-        set(v) { sp.edit().putString("cloudModel", v).apply(); bump() }
-
     /** Hold every AI reply for approval instead of sending it. */
     var requireApproval: Boolean
         get() = sp.getBoolean("approve", true)
@@ -141,26 +119,6 @@ object Prefs {
 
     fun deleteStyleExample(id: String) =
         saveStyleExamples(styleExamples().filterNot { it.id == id })
-
-    /**
-     * Pulls pairs out of replies you typed yourself in the bubble. Those are the
-     * truest sample of how you write, and they are already on the phone.
-     */
-    fun harvestStyleFromHistory(limit: Int = 12): Int {
-        val existing = styleExamples()
-        val have = existing.map { it.reply.trim().lowercase() }.toHashSet()
-        val found = log()
-            .asSequence()
-            .filter { !it.auto && it.ok }
-            .filter { it.reply.isNotBlank() && it.incoming.isNotBlank() }
-            .filter { it.reply.trim().lowercase() !in have }
-            .distinctBy { it.reply.trim().lowercase() }
-            .take(limit)
-            .map { StyleExample(incoming = it.incoming, reply = it.reply) }
-            .toList()
-        if (found.isNotEmpty()) saveStyleExamples(existing + found)
-        return found.size
-    }
 
     // ---------- on-device AI ----------
 
@@ -265,32 +223,4 @@ object Prefs {
         )
     )
 
-    // ---------- log ----------
-
-    fun log(): List<LogEntry> {
-        logCache?.let { return it }
-        val raw = sp.getString("log", null) ?: return emptyList<LogEntry>().also { logCache = it }
-        val out = mutableListOf<LogEntry>()
-        runCatching {
-            val arr = JSONArray(raw)
-            for (i in 0 until arr.length()) out += LogEntry.fromJson(arr.getJSONObject(i))
-        }
-        logCache = out
-        return out
-    }
-
-    fun addLog(entry: LogEntry) {
-        val list = (listOf(entry) + log()).take(MAX_LOG)
-        val arr = JSONArray()
-        list.forEach { arr.put(it.toJson()) }
-        sp.edit().putString("log", arr.toString()).apply()
-        logCache = list
-        bump()
-    }
-
-    fun clearLog() {
-        sp.edit().remove("log").apply()
-        logCache = emptyList()
-        bump()
-    }
 }
