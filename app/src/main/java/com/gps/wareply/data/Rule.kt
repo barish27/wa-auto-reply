@@ -10,6 +10,7 @@ enum class AiBackend(val label: String) {
 
 enum class MatchType(val label: String) {
     ANY_MESSAGE("Any message"),
+    CONTACT_IS("Specific contact"),
     CONTACT_CONTAINS("Sender name contains"),
     TEXT_CONTAINS("Message contains")
 }

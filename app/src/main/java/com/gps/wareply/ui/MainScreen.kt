@@ -298,6 +298,7 @@ private fun RulesTab() {
                                 Text(
                                     when (rule.match) {
                                         MatchType.ANY_MESSAGE -> "Any message"
+                                        MatchType.CONTACT_IS -> "Only ${rule.value}"
                                         MatchType.CONTACT_CONTAINS -> "Sender contains \"${rule.value}\""
                                         MatchType.TEXT_CONTAINS -> "Message contains \"${rule.value}\""
                                     } + (if (rule.includeGroups) " · groups too" else "")
@@ -368,7 +369,20 @@ private fun RuleEditor(rule: Rule, onDismiss: () -> Unit, onSave: (Rule) -> Unit
                 if (match != MatchType.ANY_MESSAGE) {
                     OutlinedTextField(
                         value = value, onValueChange = { value = it },
-                        label = { Text("Text to look for") }, singleLine = true,
+                        label = {
+                            Text(
+                                when (match) {
+                                    MatchType.CONTACT_IS -> "Contact name shown by WhatsApp"
+                                    MatchType.CONTACT_CONTAINS -> "Part of a sender or group name"
+                                    MatchType.TEXT_CONTAINS -> "Text to look for"
+                                    MatchType.ANY_MESSAGE -> ""
+                                }
+                            )
+                        },
+                        supportingText = if (match == MatchType.CONTACT_IS) ({
+                            Text("Matches only that sender, ignoring case and extra spaces")
+                        }) else null,
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

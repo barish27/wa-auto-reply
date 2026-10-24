@@ -75,8 +75,10 @@ without extra setup.
 ## Auto-reply rules
 
 Rules tab. The **first enabled rule that matches wins**. Each rule has a trigger
-(any message / sender name contains / message contains), a reply, and whether it
-applies in groups.
+(any message / specific contact / sender name contains / message contains), a
+reply, and whether it applies in groups. **Specific contact** compares the
+sender's WhatsApp display name exactly (ignoring case and extra spaces), so a
+reply intended for one person does not also match a similarly named chat.
 
 Placeholders in a reply: `{name}` (first name), `{fullname}`, `{chat}`, `{time}`.
 

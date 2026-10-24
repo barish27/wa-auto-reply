@@ -87,6 +87,11 @@ object AutoReplyEngine {
         if (msg.isGroup && !rule.includeGroups) return false
         return when (rule.match) {
             MatchType.ANY_MESSAGE -> true
+            // Match the person who wrote the message, never the group title. This
+            // lets a rule safely target one WhatsApp contact without accidentally
+            // replying to similarly named chats.
+            MatchType.CONTACT_IS ->
+                rule.value.isNotBlank() && sameContact(msg.sender, rule.value)
             MatchType.CONTACT_CONTAINS ->
                 rule.value.isNotBlank() &&
                     (msg.sender.contains(rule.value, true) ||
@@ -95,6 +100,11 @@ object AutoReplyEngine {
                 rule.value.isNotBlank() && msg.text.contains(rule.value, true)
         }
     }
+
+    /** WhatsApp display names can contain accidental extra spaces in notifications. */
+    private fun sameContact(sender: String, selectedContact: String): Boolean =
+        sender.trim().replace(Regex("\\s+"), " ")
+            .equals(selectedContact.trim().replace(Regex("\\s+"), " "), ignoreCase = true)
 
     private fun expand(template: String, msg: IncomingMessage): String {
         val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
