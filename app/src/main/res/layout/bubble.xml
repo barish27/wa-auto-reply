@@ -112,6 +112,41 @@
             android:textSize="12sp"
             android:visibility="gone" />
 
+        <LinearLayout
+            android:id="@+id/approvalRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/discard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:text="Discard"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/approve"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_send"
+                android:paddingStart="26dp"
+                android:paddingEnd="26dp"
+                android:paddingTop="11dp"
+                android:paddingBottom="11dp"
+                android:text="Send this"
+                android:textColor="#FFFFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/input"
             android:layout_width="match_parent"

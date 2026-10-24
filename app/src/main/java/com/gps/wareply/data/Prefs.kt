@@ -93,6 +93,75 @@ object Prefs {
         get() = sp.getString("cloudModel", "gpt-5-nano") ?: ""
         set(v) { sp.edit().putString("cloudModel", v).apply(); bump() }
 
+    /** Hold every AI reply for approval instead of sending it. */
+    var requireApproval: Boolean
+        get() = sp.getBoolean("approve", true)
+        set(v) { sp.edit().putBoolean("approve", v).apply(); bump() }
+
+    /** How long an approval bubble waits before giving up on you. */
+    var approvalWindowSeconds: Int
+        get() = sp.getInt("approveWindow", 120)
+        set(v) { sp.edit().putInt("approveWindow", v.coerceIn(15, 600)).apply(); bump() }
+
+    // ---------- writing style ----------
+
+    var styleEnabled: Boolean
+        get() = sp.getBoolean("styleOn", true)
+        set(v) { sp.edit().putBoolean("styleOn", v).apply(); bump() }
+
+    private var styleCache: List<StyleExample>? = null
+
+    fun styleExamples(): List<StyleExample> {
+        styleCache?.let { return it }
+        val raw = sp.getString("style", null)
+            ?: return emptyList<StyleExample>().also { styleCache = it }
+        val out = mutableListOf<StyleExample>()
+        runCatching {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) out += StyleExample.fromJson(arr.getJSONObject(i))
+        }
+        styleCache = out
+        return out
+    }
+
+    fun saveStyleExamples(list: List<StyleExample>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it.toJson()) }
+        sp.edit().putString("style", arr.toString()).apply()
+        styleCache = list
+        bump()
+    }
+
+    fun upsertStyleExample(e: StyleExample) {
+        val list = styleExamples().toMutableList()
+        val i = list.indexOfFirst { it.id == e.id }
+        if (i >= 0) list[i] = e else list += e
+        saveStyleExamples(list)
+    }
+
+    fun deleteStyleExample(id: String) =
+        saveStyleExamples(styleExamples().filterNot { it.id == id })
+
+    /**
+     * Pulls pairs out of replies you typed yourself in the bubble. Those are the
+     * truest sample of how you write, and they are already on the phone.
+     */
+    fun harvestStyleFromHistory(limit: Int = 12): Int {
+        val existing = styleExamples()
+        val have = existing.map { it.reply.trim().lowercase() }.toHashSet()
+        val found = log()
+            .asSequence()
+            .filter { !it.auto && it.ok }
+            .filter { it.reply.isNotBlank() && it.incoming.isNotBlank() }
+            .filter { it.reply.trim().lowercase() !in have }
+            .distinctBy { it.reply.trim().lowercase() }
+            .take(limit)
+            .map { StyleExample(incoming = it.incoming, reply = it.reply) }
+            .toList()
+        if (found.isNotEmpty()) saveStyleExamples(existing + found)
+        return found.size
+    }
+
     // ---------- on-device AI ----------
 
     /** Master switch: write replies with the local model instead of fixed text. */

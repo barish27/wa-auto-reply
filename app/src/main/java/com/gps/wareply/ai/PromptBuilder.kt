@@ -11,6 +11,23 @@ import com.gps.wareply.service.IncomingMessage
  */
 object PromptBuilder {
 
+    /** Up to six of the owner's own replies, as imitation targets. */
+    private fun styleBlock(): String {
+        if (!Prefs.styleEnabled) return ""
+        val examples = Prefs.styleExamples()
+            .filter { it.enabled && it.incoming.isNotBlank() && it.reply.isNotBlank() }
+            .take(6)
+        if (examples.isEmpty()) return ""
+        return buildString {
+            append("\n\nHere is how the owner actually replies. Copy this tone, length and ")
+            append("language mix as closely as you can:\n")
+            examples.forEach { e ->
+                append("\nThem: ").append(e.incoming.trim())
+                append("\nOwner: ").append(e.reply.trim()).append("\n")
+            }
+        }
+    }
+
     /** The standing instructions, as a chat API's system message. */
     fun systemPrompt(): String {
         val persona = Prefs.aiPersona.trim().ifBlank {
@@ -28,6 +45,7 @@ object PromptBuilder {
             append("If a decision is asked for, say the owner will reply properly later.\n")
             append("- Never invent facts, numbers or dates. If unsure, stay vague.\n")
             append("- Output only the reply text itself.")
+            append(styleBlock())
         }
     }
 
@@ -55,8 +73,9 @@ object PromptBuilder {
             append("- Never agree to a meeting, a payment, a deadline or any commitment. ")
             append("If the message asks for a decision, say you will reply properly later.\n")
             append("- Never invent facts, numbers or dates.\n")
-            append("- Output only the reply text itself, nothing else.\n\n")
-            append("Message from ").append(msg.sender).append(": \"").append(msg.text).append("\"")
+            append("- Output only the reply text itself, nothing else.")
+            append(styleBlock())
+            append("\n\nMessage from ").append(msg.sender).append(": \"").append(msg.text).append("\"")
         }
 
         return if (Prefs.aiUseChatTemplate) {

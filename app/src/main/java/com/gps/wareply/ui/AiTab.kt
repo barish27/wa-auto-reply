@@ -16,6 +16,7 @@ import com.gps.wareply.ai.ReplyWriter
 import com.gps.wareply.ai.ModelStore
 import com.gps.wareply.data.AiBackend
 import com.gps.wareply.data.Prefs
+import com.gps.wareply.data.StyleExample
 import com.gps.wareply.service.IncomingMessage
 import kotlinx.coroutines.launch
 
@@ -36,6 +37,8 @@ fun AiTab() {
     var testInput by remember { mutableStateOf("Bhai kal site pe aa rahe ho kya?") }
     var testOutput by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
+    var editingStyle by remember { mutableStateOf<StyleExample?>(null) }
+    var harvested by remember { mutableStateOf<Int?>(null) }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -207,6 +210,42 @@ fun AiTab() {
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Text("Before it sends", style = MaterialTheme.typography.titleMedium)
+                    AiSwitch(
+                        "Show me the reply first",
+                        "The bubble opens with the AI's draft. Read it, edit it if you want, " +
+                            "then tap Send this. Nothing goes out until you do.",
+                        Prefs.requireApproval
+                    ) { Prefs.requireApproval = it }
+                    if (Prefs.requireApproval) {
+                        Text(
+                            "Wait ${Prefs.approvalWindowSeconds}s for me, then drop it",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Slider(
+                            value = Prefs.approvalWindowSeconds.toFloat(),
+                            onValueChange = { Prefs.approvalWindowSeconds = it.toInt() },
+                            valueRange = 15f..600f, steps = 38
+                        )
+                        Text(
+                            "Needs the floating bubble switched on, since that is what you tap.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "Replies are sent the moment they are written, without you seeing them.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
                     Text("Behaviour", style = MaterialTheme.typography.titleMedium)
                     AiSwitch(
                         "Let the model write replies",
@@ -246,6 +285,91 @@ fun AiTab() {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Write like me", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Show the AI a few replies you have actually written and it copies " +
+                            "your tone, length and language mix. The model itself is not " +
+                            "changed — the examples are sent with every request — so a handful " +
+                            "of good ones beats a long list.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    AiSwitch("Use my examples", null, Prefs.styleEnabled) {
+                        Prefs.styleEnabled = it
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { editingStyle = StyleExample() }) { Text("Add one") }
+                        OutlinedButton(onClick = {
+                            harvested = Prefs.harvestStyleFromHistory()
+                        }) { Text("Learn from my replies") }
+                    }
+                    harvested?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            if (it > 0) "Added $it from replies you typed yourself."
+                            else "No new ones found — reply manually from the bubble a few " +
+                                "times and they will show up here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    val examples = Prefs.styleExamples()
+                    if (examples.isEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "No examples yet. Replies will use the persona above only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    examples.forEach { ex ->
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Column(Modifier.padding(12.dp).fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "Them: ${ex.incoming}",
+                                        Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Switch(
+                                        checked = ex.enabled,
+                                        onCheckedChange = {
+                                            Prefs.upsertStyleExample(ex.copy(enabled = it))
+                                        }
+                                    )
+                                }
+                                Text("You: ${ex.reply}", style = MaterialTheme.typography.bodyMedium)
+                                Row {
+                                    TextButton(onClick = { editingStyle = ex }) { Text("Edit") }
+                                    TextButton(onClick = {
+                                        Prefs.deleteStyleExample(ex.id)
+                                    }) { Text("Delete") }
+                                }
+                            }
+                        }
+                    }
+                    if (examples.size > 6) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Only the first six switched-on examples are sent.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -371,6 +495,57 @@ fun AiTab() {
             )
         }
     }
+
+    editingStyle?.let { ex ->
+        StyleEditor(
+            example = ex,
+            onDismiss = { editingStyle = null },
+            onSave = { Prefs.upsertStyleExample(it); editingStyle = null; harvested = null }
+        )
+    }
+}
+
+@Composable
+private fun StyleEditor(
+    example: StyleExample,
+    onDismiss: () -> Unit,
+    onSave: (StyleExample) -> Unit
+) {
+    var incoming by remember { mutableStateOf(example.incoming) }
+    var reply by remember { mutableStateOf(example.reply) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Example reply") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = incoming, onValueChange = { incoming = it },
+                    label = { Text("When someone writes") },
+                    minLines = 2, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = reply, onValueChange = { reply = it },
+                    label = { Text("I reply something like") },
+                    minLines = 2, modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Use your real words, including the way you mix Hindi, Odia and English.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = incoming.isNotBlank() && reply.isNotBlank(),
+                onClick = {
+                    onSave(example.copy(incoming = incoming.trim(), reply = reply.trim()))
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable
