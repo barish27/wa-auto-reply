@@ -99,10 +99,6 @@ class WaNotificationListener : NotificationListenerService() {
             return
         }
 
-        // In approval mode nothing is sent without a tap, so the bubble must be
-        // there to tap. Without it the draft would have nowhere to go.
-        val approve = Prefs.requireApproval && Prefs.bubbleEnabled
-
         scope.launch {
             val written = ReplyWriter.write(this@WaNotificationListener, msg)
 
@@ -116,13 +112,6 @@ class WaNotificationListener : NotificationListenerService() {
                 // Nothing sendable. Release the cooldown so the next message gets a turn.
                 AutoReplyEngine.clearCooldown(msg.chatKey)
                 BubbleManager.noteAiFailed(msg.chatKey, ReplyWriter.lastError())
-                return@launch
-            }
-
-            if (approve) {
-                // The user may ignore it, so give the chat its turn back.
-                AutoReplyEngine.clearCooldown(msg.chatKey)
-                BubbleManager.offerDraft(msg.chatKey, text)
                 return@launch
             }
 

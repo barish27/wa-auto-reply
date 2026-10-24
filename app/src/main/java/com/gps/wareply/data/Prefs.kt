@@ -103,16 +103,6 @@ object Prefs {
         bump()
     }
 
-    /** Hold every AI reply for approval instead of sending it. */
-    var requireApproval: Boolean
-        get() = sp.getBoolean("approve", true)
-        set(v) { sp.edit().putBoolean("approve", v).apply(); bump() }
-
-    /** How long an approval bubble waits before giving up on you. */
-    var approvalWindowSeconds: Int
-        get() = sp.getInt("approveWindow", 120)
-        set(v) { sp.edit().putInt("approveWindow", v.coerceIn(15, 600)).apply(); bump() }
-
     // ---------- writing style ----------
 
     var styleEnabled: Boolean

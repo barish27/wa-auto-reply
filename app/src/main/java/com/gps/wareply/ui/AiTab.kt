@@ -220,42 +220,6 @@ fun AiTab() {
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Before it sends", style = MaterialTheme.typography.titleMedium)
-                    AiSwitch(
-                        "Show me the reply first",
-                        "The bubble opens with the AI's draft. Read it, edit it if you want, " +
-                            "then tap Send this. Nothing goes out until you do.",
-                        Prefs.requireApproval
-                    ) { Prefs.requireApproval = it }
-                    if (Prefs.requireApproval) {
-                        Text(
-                            "Wait ${Prefs.approvalWindowSeconds}s for me, then drop it",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Slider(
-                            value = Prefs.approvalWindowSeconds.toFloat(),
-                            onValueChange = { Prefs.approvalWindowSeconds = it.toInt() },
-                            valueRange = 15f..600f, steps = 38
-                        )
-                        Text(
-                            "Needs the floating bubble switched on, since that is what you tap.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            "Replies are sent the moment they are written, without you seeing them.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
                     Text("Behaviour", style = MaterialTheme.typography.titleMedium)
                     AiSwitch(
                         "Let the model write replies",

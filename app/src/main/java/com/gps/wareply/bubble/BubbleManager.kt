@@ -46,9 +46,7 @@ object BubbleManager {
         val autoReplied: String?,
         val pendingAi: Boolean = false,
         val contentIntent: PendingIntent?,
-        val avatar: Icon? = null,
-        /** An AI draft waiting for the user to approve it. */
-        val draft: String? = null
+        val avatar: Icon? = null
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -91,21 +89,6 @@ object BubbleManager {
     /** When the user opens the chat in WhatsApp the notification clears — drop the bubble too. */
     fun onChatCleared(tag: String?) = main.post {
         if (tag != null && current?.chatKey == tag && !expanded) destroy()
-    }
-
-    /**
-     * A draft is ready and needs the user. Opens the card with the text loaded
-     * so they can read, edit, then send — nothing goes out on its own.
-     */
-    fun offerDraft(chatKey: String, draft: String) = main.post {
-        val p = current ?: return@post
-        if (p.chatKey != chatKey) return@post
-        current = p.copy(draft = draft, pendingAi = false)
-        val v = root ?: return@post
-        if (!expanded) expand() else current?.let { bind(it) }
-        v.findViewById<EditText>(R.id.input).setText(draft)
-        main.removeCallbacks(hideRunnable)
-        main.postDelayed(hideRunnable, Prefs.approvalWindowSeconds * 1000L)
     }
 
     /** Called once the model's reply actually went out. */
@@ -214,10 +197,6 @@ object BubbleManager {
                     text = "Auto-replied: ${p.autoReplied}"
                     visibility = View.VISIBLE
                 }
-                p.draft != null -> {
-                    text = "Suggested reply — check it before sending:"
-                    visibility = View.VISIBLE
-                }
                 p.pendingAi -> {
                     text = "Writing a reply…"
                     visibility = View.VISIBLE
@@ -226,12 +205,8 @@ object BubbleManager {
             }
         }
 
-        // With a draft waiting, the input holds it so it can be edited, and the
-        // approve row replaces the ordinary send button.
-        v.findViewById<View>(R.id.approvalRow).visibility =
-            if (p.draft != null) View.VISIBLE else View.GONE
-        v.findViewById<View>(R.id.send).visibility =
-            if (p.draft != null) View.GONE else View.VISIBLE
+        v.findViewById<View>(R.id.approvalRow).visibility = View.GONE
+        v.findViewById<View>(R.id.send).visibility = View.VISIBLE
         v.findViewById<TextView>(R.id.badge).apply {
             if (unread > 1 && !expanded) {
                 text = if (unread > 9) "9+" else unread.toString()
@@ -271,7 +246,7 @@ object BubbleManager {
         runCatching { manager.updateViewLayout(v, lp) }
 
         val input = v.findViewById<EditText>(R.id.input)
-        input.setText(current?.draft ?: "")
+        input.setText("")
         input.setSelection(input.text?.length ?: 0)
         input.requestFocus()
         main.postDelayed({
@@ -321,8 +296,6 @@ object BubbleManager {
             return
         }
         val ok = action.send(ctx, text)
-        // An untouched draft counts as the model's work; an edited one is yours.
-        val fromAi = p.draft != null && text == p.draft
         Prefs.addLog(
             LogEntry(
                 time = System.currentTimeMillis(),
@@ -331,7 +304,7 @@ object BubbleManager {
                 reply = text,
                 auto = false,
                 ok = ok,
-                ai = fromAi
+                ai = false
             )
         )
         Toast.makeText(ctx, if (ok) "Sent" else "Could not send", Toast.LENGTH_SHORT).show()
@@ -431,8 +404,7 @@ object BubbleManager {
             autoReplied = null,
             pendingAi = false,
             contentIntent = null,
-            avatar = null,
-            draft = null
+            avatar = null
         )
     )
 }
