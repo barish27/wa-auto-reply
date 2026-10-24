@@ -82,6 +82,14 @@ reply intended for one person does not also match a similarly named chat.
 
 Placeholders in a reply: `{name}` (first name), `{fullname}`, `{chat}`, `{time}`.
 
+## ChatGPT AI replies
+
+On the **AI** tab, choose **ChatGPT / API** and tap **Use ChatGPT API defaults**.
+Enter an OpenAI Platform API key (a ChatGPT subscription does not include API
+credits) and enable **Let the model write replies**. Then tick **Write with AI**
+on each rule that should use it. Keep approval on while testing; AI requests send
+the incoming message to OpenAI.
+
 Three guards exist so the app does not embarrass you, all on the Setup tab:
 
 | Guard | Default | Why |

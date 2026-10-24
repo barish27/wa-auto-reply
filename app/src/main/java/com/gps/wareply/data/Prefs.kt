@@ -93,6 +93,16 @@ object Prefs {
         get() = sp.getString("cloudModel", "gpt-5-nano") ?: ""
         set(v) { sp.edit().putString("cloudModel", v).apply(); bump() }
 
+    /** Select the official OpenAI endpoint without touching the user's API key. */
+    fun useChatGptApi() {
+        sp.edit()
+            .putString("aiBackend", AiBackend.CLOUD.name)
+            .putString("cloudUrl", "https://api.openai.com/v1")
+            .putString("cloudModel", "gpt-5-nano")
+            .apply()
+        bump()
+    }
+
     /** Hold every AI reply for approval instead of sending it. */
     var requireApproval: Boolean
         get() = sp.getBoolean("approve", true)

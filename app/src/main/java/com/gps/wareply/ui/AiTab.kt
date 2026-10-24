@@ -104,6 +104,16 @@ fun AiTab() {
                 Column(Modifier.padding(16.dp)) {
                     Text("API settings", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { Prefs.useChatGptApi(); testOutput = null },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Use ChatGPT API defaults") }
+                    Text(
+                        "Sets the official OpenAI endpoint and gpt-5-nano. Your API key is kept unchanged.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = Prefs.cloudApiKey,
                         onValueChange = { Prefs.cloudApiKey = it.trim() },
@@ -136,7 +146,7 @@ fun AiTab() {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        "Leave as is for ChatGPT. Any OpenAI-compatible endpoint works here, " +
+                        "Leave as is for the OpenAI API. Any OpenAI-compatible endpoint works here, " +
                             "including an Ollama server on your own PC.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
