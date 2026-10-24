@@ -59,11 +59,14 @@ data class LogEntry(
     val auto: Boolean,
     val ok: Boolean,
     /** Written by the on-device model rather than taken from the rule text. */
-    val ai: Boolean = false
+    val ai: Boolean = false,
+    /** Set when nothing was sent; says which gate stopped it. */
+    val skipped: String? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("time", time); put("chat", chat); put("incoming", incoming)
         put("reply", reply); put("auto", auto); put("ok", ok); put("ai", ai)
+        skipped?.let { put("skip", it) }
     }
 
     companion object {
@@ -74,7 +77,8 @@ data class LogEntry(
             reply = o.optString("reply"),
             auto = o.optBoolean("auto"),
             ok = o.optBoolean("ok", true),
-            ai = o.optBoolean("ai", false)
+            ai = o.optBoolean("ai", false),
+            skipped = o.optString("skip", "").takeIf { it.isNotBlank() }
         )
     }
 }

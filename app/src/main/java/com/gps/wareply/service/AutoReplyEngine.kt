@@ -24,24 +24,52 @@ object AutoReplyEngine {
     /** What should be sent, and whether the model gets to write it. */
     data class Decision(val canned: String, val useAi: Boolean)
 
-    fun decide(ctx: Context, msg: IncomingMessage): Decision? {
-        if (!Prefs.autoReplyEnabled) return null
-        if (msg.isGroup && Prefs.skipGroups) return null
-        if (!withinActiveHours()) return null
-        if (Prefs.onlyWhenScreenOff && screenIsOn(ctx)) return null
+    /** Why a message was passed over, in words the user can act on. */
+    data class Skipped(val reason: String)
+
+    sealed interface Outcome {
+        data class Reply(val decision: Decision) : Outcome
+        data class Skip(val reason: String) : Outcome
+    }
+
+    fun decide(ctx: Context, msg: IncomingMessage): Outcome {
+        if (!Prefs.autoReplyEnabled)
+            return Outcome.Skip("Auto-reply is switched off in Setup")
+        if (msg.isGroup && Prefs.skipGroups)
+            return Outcome.Skip("Group chat, and \"never auto-reply in groups\" is on")
+        if (!withinActiveHours())
+            return Outcome.Skip(
+                "Outside active hours (" + fmt(Prefs.activeFrom) + "–" + fmt(Prefs.activeTo) + ")"
+            )
+        if (Prefs.onlyWhenScreenOff && screenIsOn(ctx))
+            return Outcome.Skip("Screen is on, and \"only while the screen is off\" is set")
 
         val cooldownMs = Prefs.cooldownMinutes * 60_000L
         val last = lastReplied[msg.chatKey]
-        if (last != null && System.currentTimeMillis() - last < cooldownMs) return null
+        if (last != null && System.currentTimeMillis() - last < cooldownMs) {
+            val leftMin = ((cooldownMs - (System.currentTimeMillis() - last)) / 60_000L) + 1
+            return Outcome.Skip("Already replied to this chat — ${'$'}leftMin min of cooldown left")
+        }
 
-        val rule = Prefs.rules().firstOrNull { it.enabled && matches(it, msg) } ?: return null
+        val rule = Prefs.rules().firstOrNull { it.enabled && matches(it, msg) }
+            ?: return Outcome.Skip(
+                if (Prefs.rules().none { it.enabled }) "No rule is switched on"
+                else "No enabled rule matches this message"
+            )
 
         val useAi = Prefs.aiEnabled && rule.useAi
         // A fixed-text rule with no text has nothing to send. An AI rule may have
         // an empty fallback as long as the fallback is switched off.
-        if (rule.reply.isBlank() && !useAi) return null
+        if (rule.reply.isBlank() && !useAi)
+            return Outcome.Skip("Rule \"${'$'}{rule.name}\" has no reply text")
 
-        return Decision(canned = expand(rule.reply, msg), useAi = useAi)
+        return Outcome.Reply(Decision(canned = expand(rule.reply, msg), useAi = useAi))
+    }
+
+    private fun fmt(m: Int): String {
+        val h = m / 60
+        val h12 = if (h % 12 == 0) 12 else h % 12
+        return String.format(Locale.getDefault(), "%d:%02d %s", h12, m % 60, if (h < 12) "AM" else "PM")
     }
 
     fun markReplied(chatKey: String) {

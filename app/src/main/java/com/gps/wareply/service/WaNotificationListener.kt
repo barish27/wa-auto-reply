@@ -55,7 +55,8 @@ class WaNotificationListener : NotificationListenerService() {
         lastHandled = sig
         lastHandledAt = now
 
-        val decision = AutoReplyEngine.decide(this, msg)
+        val outcome = AutoReplyEngine.decide(this, msg)
+        val decision = (outcome as? AutoReplyEngine.Outcome.Reply)?.decision
 
         // Show the bubble first so the message is on screen while the model thinks.
         if (Prefs.bubbleEnabled) {
@@ -75,7 +76,19 @@ class WaNotificationListener : NotificationListenerService() {
             )
         }
 
-        if (decision == null) return
+        if (decision == null) {
+            // Record the near-miss so the History tab can explain the silence
+            // instead of the user guessing which switch is wrong.
+            (outcome as? AutoReplyEngine.Outcome.Skip)?.let { skip ->
+                Prefs.addLog(
+                    LogEntry(
+                        time = now, chat = msg.displayChat, incoming = msg.text,
+                        reply = "", auto = true, ok = false, skipped = skip.reason
+                    )
+                )
+            }
+            return
+        }
 
         // Claim the cooldown slot now, not after generation: a second message
         // arriving while the model is running must not start a second reply.
@@ -124,6 +137,8 @@ class WaNotificationListener : NotificationListenerService() {
         aiWritten: Boolean
     ) {
         val ok = action.send(this, text)
+        // A send that failed should not cost the chat its whole cooldown window.
+        if (!ok) AutoReplyEngine.clearCooldown(msg.chatKey)
         Prefs.addLog(
             LogEntry(
                 time = System.currentTimeMillis(),

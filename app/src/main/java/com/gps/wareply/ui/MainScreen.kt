@@ -168,6 +168,12 @@ private fun SetupTab(ctx: Context) {
                     TextButton(onClick = { AutoReplyEngine.resetCooldowns() }) {
                         Text("Clear cooldowns now")
                     }
+                    Text(
+                        "Tap this while testing — otherwise the second message you send " +
+                            "yourself is ignored until the window passes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -449,6 +455,7 @@ private fun LogCard(e: LogEntry) {
                     label = {
                         Text(
                             when {
+                                e.skipped != null -> "skipped"
                                 e.ai -> "AI"
                                 e.auto -> "auto"
                                 else -> "manual"
@@ -465,6 +472,14 @@ private fun LogCard(e: LogEntry) {
             Spacer(Modifier.height(8.dp))
             Text("“${e.incoming}”", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(6.dp))
+            if (e.skipped != null) {
+                Text(
+                    "Did not reply — ${e.skipped}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
             Text(
                 "→ ${e.reply}",
                 style = MaterialTheme.typography.bodyMedium,
